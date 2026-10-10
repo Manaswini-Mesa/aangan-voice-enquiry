@@ -83,7 +83,7 @@ Why a separate gateway: VaaniVoice's "Bring your own LLM" (BYOL) feature keeps a
 ```bash
 npm test
 ```
-This runs **161 unit and integration tests**. They cover all 18 acceptance scenarios, every rule, precedence, pricing enforcement, persistence on a real PostgreSQL engine (PGlite), webhooks, notifications, authorisation and failure handling.
+This runs **162 unit and integration tests**. They cover all 18 acceptance scenarios, every rule, precedence, pricing enforcement, persistence on a real PostgreSQL engine (PGlite), webhooks, notifications, authorisation and failure handling.
 
 ```bash
 npm run build

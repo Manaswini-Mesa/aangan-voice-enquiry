@@ -181,6 +181,28 @@ function redactPayload(payload: unknown): unknown {
   return copy;
 }
 
+/**
+ * Retention: once a lead passes retention_until (TRANSCRIPT_RETENTION_DAYS after first contact),
+ * its transcripts, provider transcript copies and recording references are removed. The lead,
+ * its facts and its qualification/audit history remain for reporting.
+ */
+export async function applyRetention(db: Db): Promise<number> {
+  const expired = await db.query<{ id: string }>(
+    `SELECT c.id FROM calls c JOIN leads l ON l.id = c.lead_id
+     WHERE l.retention_until IS NOT NULL AND l.retention_until < now()
+       AND (c.provider_transcript IS NOT NULL OR c.recording_ref IS NOT NULL
+            OR EXISTS (SELECT 1 FROM transcript_segments s WHERE s.call_id = c.id))`,
+  );
+  for (const c of expired) {
+    await db.tx(async (tx) => {
+      await tx.query(`DELETE FROM transcript_segments WHERE call_id = $1`, [c.id]);
+      await tx.query(`UPDATE calls SET provider_transcript = NULL, recording_ref = NULL, recording_available = false WHERE id = $1`, [c.id]);
+    });
+  }
+  if (expired.length) await opsEvent(db, "info", "retention", "TRANSCRIPTS_PURGED", `Removed transcripts/recording references for ${expired.length} call(s) past retention.`);
+  return expired.length;
+}
+
 /** Sweep: finalize calls that ended without finalization (e.g. post-processing never arrived). */
 export async function finalizeStaleCalls(db: Db): Promise<{ finalized: number; pending: string[] }> {
   const stale = await db.query<{ id: string }>(

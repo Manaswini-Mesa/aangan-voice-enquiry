@@ -5,7 +5,7 @@ import { config, dashboardUrl } from "@/server/env";
 import { safeEqual } from "@/server/rate-limit";
 import { createNotification, dispatchPending } from "@/server/services/notifications";
 import { overdueEmail } from "@/server/services/notification-templates";
-import { finalizeStaleCalls } from "@/server/services/webhooks";
+import { applyRetention, finalizeStaleCalls } from "@/server/services/webhooks";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -20,6 +20,7 @@ export async function GET(req: Request) {
   if (!secret || !safeEqual(auth, secret)) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const db = await getDb();
   const stale = await finalizeStaleCalls(db);
+  const purged = await applyRetention(db);
   const pending = await db.query<{ id: string }>(
     `SELECT id FROM notifications WHERE status = 'pending' AND created_at < now() - interval '2 minutes' AND attempts < 5 ORDER BY created_at LIMIT 50`,
   );
@@ -45,5 +46,5 @@ export async function GET(req: Request) {
       }
     }
   }
-  return NextResponse.json({ finalized: stale.finalized, retried: pending.length, digest });
+  return NextResponse.json({ finalized: stale.finalized, retried: pending.length, digest, transcriptsPurged: purged });
 }

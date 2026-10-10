@@ -394,6 +394,20 @@ describe("provider and database failures", () => {
   });
 });
 
+describe("retention", () => {
+  it("transcripts past the retention date are removed; the lead and its assessment remain", async () => {
+    const { applyRetention } = await import("@/server/services/webhooks");
+    const key = live();
+    const r = await calls.handleCallerTurn(db, { ...key, text: "2BHK in Baner, full home with execution", callerNumber: "+919800099999" });
+    await db.query(`UPDATE leads SET retention_until = now() - interval '1 day' WHERE id = $1`, [r.leadId]);
+    const purged = await applyRetention(db);
+    expect(purged).toBeGreaterThanOrEqual(1);
+    expect(await count(`SELECT count(*)::text n FROM transcript_segments WHERE call_id = $1`, [r.callId])).toBe(0);
+    expect(await count(`SELECT count(*)::text n FROM leads WHERE id = $1`, [r.leadId])).toBe(1);
+    expect(await count(`SELECT count(*)::text n FROM assessments WHERE lead_id = $1`, [r.leadId])).toBeGreaterThan(0);
+  });
+});
+
 describe("demo seed and metrics", () => {
   it("seeding runs every scenario through the real engine and metrics come from stored records", async () => {
     const fresh = await createMemoryDb();
