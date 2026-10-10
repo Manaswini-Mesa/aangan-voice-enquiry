@@ -40,6 +40,7 @@ Open http://localhost:3000 and sign in with a **demo account**. All data is synt
 On first start, the app runs 21 synthetic phone conversations (the acceptance scenarios P01–P18 and three extras) through the real engine. That gives the dashboard realistic, clearly labelled **Simulated** data. Signing in for the first time takes a few seconds while this happens. Demo data lives in `./.data/pglite`; delete that folder to start fresh.
 
 **Things to try**
+- **Talk to receptionist** — a real voice conversation with the VaaniVoice agent in your browser (needs `VAANI_API_KEY` + `VAANI_AGENT_ID` and a shared database). After you hang up, the call is pulled from VaaniVoice and qualified by the rules.
 - **Call simulator:** type as a caller, or run any acceptance scenario. Watch facts and criteria update live.
 - **Review queue:** open a case, choose a decision and give a rationale. The automated assessment is kept alongside your decision.
 - **Handoffs & follow-ups:** assign a designer, or retry the deliberately failed demo email.
@@ -78,12 +79,16 @@ Why a separate gateway: VaaniVoice's "Bring your own LLM" (BYOL) feature keeps a
 | `scripts/` | End-to-end test, gateway smoke test, migrations, user creation |
 | `docs/` | Business rules, setup guides, requirements checklist, acceptance report |
 
+## VaaniVoice agent (current setup)
+
+The agent **Aangan Studio Receptionist** exists in the VaaniVoice account; its script is versioned in [`vaani/agent-system-prompt.md`](vaani/agent-system-prompt.md). Until the BYOL gateway is hosted, the live conversation runs on VaaniVoice's own model following that script, and this app applies the deterministic rules **after** each call (pulled via the VaaniVoice API, or pushed by webhook if registered). Any price the provider's agent speaks is flagged as an operational error. Note: VaaniVoice's `GET /api/call-history` returned HTTP 500 ("Invalid client_id format") for this account on 2026-10-10 — a provider-side issue; the sync falls back to looking up known calls individually.
+
 ## 3. Tests
 
 ```bash
 npm test
 ```
-This runs **162 unit and integration tests**. They cover all 18 acceptance scenarios, every rule, precedence, pricing enforcement, persistence on a real PostgreSQL engine (PGlite), webhooks, notifications, authorisation and failure handling.
+This runs **163 unit and integration tests**. They cover all 18 acceptance scenarios, every rule, precedence, pricing enforcement, persistence on a real PostgreSQL engine (PGlite), webhooks, notifications, authorisation and failure handling.
 
 ```bash
 npm run build
