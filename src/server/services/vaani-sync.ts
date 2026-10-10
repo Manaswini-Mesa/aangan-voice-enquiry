@@ -133,3 +133,18 @@ export async function syncVaaniCalls(db: Db, opts: { maxPages?: number } = {}): 
   await audit(db, { label: "vaani_sync" }, "vaani.sync", "system", "vaani", null, undefined, { checked: result.checked, ingested: result.ingested, historyAvailable: result.historyAvailable });
   return result;
 }
+
+/**
+ * Ingest one call by ID (used by the notification webhook). The ID is untrusted: we only act on
+ * data fetched from VaaniVoice with our own API key, so a forged notification cannot create
+ * records — VaaniVoice simply won't return details for a call that isn't in our account.
+ */
+export async function ingestVaaniCallById(db: Db, callId: string): Promise<{ status: "ingested" | "already" | "not_ready"; pendingNotifications: string[] }> {
+  const cfg = config();
+  if (!cfg.vaani.apiKey) return { status: "not_ready", pendingNotifications: [] };
+  const existing = (await db.query<CallRow>(`SELECT * FROM calls WHERE provider = 'vaani' AND provider_call_id = $1`, [callId]))[0];
+  if (existing?.finalized_at) return { status: "already", pendingNotifications: [] };
+  const client = new VaaniClient(cfg.vaani.apiKey, cfg.vaani.baseUrl);
+  const ids = await ingestCall(db, client, { call_id: callId }, existing?.mode ?? "live");
+  return ids === null ? { status: "not_ready", pendingNotifications: [] } : { status: "ingested", pendingNotifications: ids };
+}

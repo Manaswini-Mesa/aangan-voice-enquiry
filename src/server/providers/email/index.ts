@@ -63,6 +63,9 @@ export class ResendProvider implements EmailProvider {
       if (!res.ok) return { ok: false, detail: `Resend responded ${res.status}. A restricted "sending only" key cannot list domains — try sending a test notification instead.` };
       const body = (await res.json()) as { data?: Array<{ name: string; status: string }> };
       const fromDomain = this.from.match(/@([^>\s]+)/)?.[1];
+      if (fromDomain === "resend.dev") {
+        return { ok: true, detail: "Key works. Using Resend's test sender (onboarding@resend.dev): emails can only be delivered to the address that owns the Resend account until a domain is verified." };
+      }
       const domain = body.data?.find((d) => d.name === fromDomain);
       if (!domain) return { ok: false, detail: `Key works, but sender domain "${fromDomain}" is not added in Resend.` };
       return { ok: domain.status === "verified", detail: `Sender domain ${domain.name}: ${domain.status}.` };
