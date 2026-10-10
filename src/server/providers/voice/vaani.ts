@@ -170,18 +170,45 @@ export class VaaniClient {
 
   async verify(agentId?: string): Promise<{ ok: boolean; detail: string }> {
     try {
-      const { status, body } = await this.get<unknown>("/api/agents");
+      // Note: GET /api/agents without parameters returned an empty list in testing (2026-10-10);
+      // the paginated form returns the agents, so that is what we use.
+      const { status, body } = await this.get<unknown>("/api/agents?page=1&page_size=200");
       if (status === 401 || status === 403) return { ok: false, detail: `API key rejected (${status}).` };
       if (status !== 200) return { ok: false, detail: `Vaani API responded ${status}.` };
-      const list = Array.isArray(body) ? body : Array.isArray((body as { agents?: unknown[] })?.agents) ? (body as { agents: unknown[] }).agents : [];
+      const b = body as { data?: Array<{ id?: string; display_name?: string; published?: boolean }> } | Array<{ id?: string }>;
+      const list = Array.isArray(b) ? b : (b?.data ?? []);
       if (agentId) {
-        const found = list.some((a) => JSON.stringify(a).includes(agentId));
-        return { ok: found, detail: found ? `API key valid; agent ${agentId.slice(0, 8)}… found.` : "API key valid, but VAANI_AGENT_ID was not found in this account." };
+        const found = list.find((a) => (a as { id?: string }).id === agentId) as { display_name?: string; published?: boolean } | undefined;
+        return found
+          ? { ok: true, detail: `API key valid; agent "${found.display_name ?? agentId.slice(0, 8)}" found${found.published === false ? " (not published in the Vaani dashboard)" : ""}.` }
+          : { ok: false, detail: "API key valid, but VAANI_AGENT_ID was not found in this account." };
       }
       return { ok: true, detail: `API key valid; ${list.length} agent(s) visible. Set VAANI_AGENT_ID to check a specific agent.` };
     } catch {
       return { ok: false, detail: "Could not reach api.vaanivoice.ai." };
     }
+  }
+
+  /** GET /api/call-history — paginated, newest first. */
+  async callHistory(page = 1, pageSize = 50): Promise<{ data: VaaniHistoryCall[]; hasNext: boolean } | null> {
+    const { status, body } = await this.get<{ data?: VaaniHistoryCall[]; pagination?: { has_next?: boolean } }>(`/api/call-history?page=${page}&page_size=${pageSize}`);
+    if (status !== 200 || !body) return null;
+    return { data: body.data ?? [], hasNext: !!body.pagination?.has_next };
+  }
+
+  /** POST /api/trigger-call/ with medium "webrtc": dispatches the agent into a LiveKit room for an in-browser session. */
+  async startWebrtcSession(agentId: string): Promise<{ token: string; roomName: string; connectionUrl: string; liveCaptionsUrl?: string }> {
+    const res = await fetch(`${this.baseUrl}/api/trigger-call/`, {
+      method: "POST",
+      headers: { "X-API-Key": this.apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({ agent_id: agentId, medium: "webrtc", primary_language: "en" }),
+      signal: AbortSignal.timeout(20_000),
+    });
+    const body = (await res.json().catch(() => ({}))) as { token?: string; room_name?: string; connection_url?: string; live_captions_url?: string; detail?: unknown };
+    if (!res.ok || !body.token || !body.connection_url || !body.room_name) {
+      throw new Error(`Vaani WebRTC dispatch failed (${res.status})`);
+    }
+    return { token: body.token, roomName: body.room_name, connectionUrl: body.connection_url, liveCaptionsUrl: body.live_captions_url };
   }
 
   async callDetails(callId: string): Promise<{ transcription?: string; summary?: string; entity?: unknown } | null> {
@@ -190,4 +217,20 @@ export class VaaniClient {
     if (typeof body.transcription === "string" && body.transcription.startsWith("Transcript is not available")) return null;
     return body;
   }
+}
+
+export interface VaaniHistoryCall {
+  call_id: string;
+  call_type?: string;
+  call_status?: string;
+  direction?: string;
+  agent_id?: string;
+  from_number?: string | null;
+  to_number?: string | null;
+  Start_time?: string;
+  End_time?: string;
+  duration_ms?: number;
+  call_cost?: number;
+  call_summary?: string | null;
+  post_processing_status?: string;
 }

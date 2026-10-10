@@ -75,7 +75,10 @@ async function run(): Promise<void> {
       await audit(db, SYSTEM_ACTOR, "users.bootstrap_admin_created", "user", cfg.bootstrapAdmin.email, null);
     }
   }
-  if (cfg.mode === "demo" && process.env.DEMO_SEED !== "off") await seedDemoData(db);
+  // Demo mode seeds by default. Live mode can opt in (SEED_SIMULATED_EXAMPLES=true) to show labelled
+  // example records next to real data; they are flagged is_simulated and hidden from live metrics.
+  const seed = cfg.mode === "demo" ? process.env.DEMO_SEED !== "off" : process.env.SEED_SIMULATED_EXAMPLES === "true";
+  if (seed) await seedDemoData(db);
 }
 
 /** Runs once per server process; safe to call from every request. */

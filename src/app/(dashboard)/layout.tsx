@@ -33,7 +33,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     { href: "/workspace", label: "Handoffs & follow-ups", count: c.work },
     ...(can(user.role, "complaints:manage") ? [{ href: "/complaints", label: "Complaints", count: c.complaints }] : []),
     { href: "/calls", label: "Call history" },
-    ...(can(user.role, "simulator:use") ? [{ href: "/simulator", label: "Call simulator" }] : []),
+    ...(can(user.role, "simulator:use") ? [{ href: "/talk", label: "Talk to receptionist" }, { href: "/simulator", label: "Call simulator" }] : []),
     ...(can(user.role, "costs:view") ? [{ href: "/costs", label: "Costs & performance" }] : []),
     ...(can(user.role, "integrations:view") ? [{ href: "/integrations", label: "Integrations" }] : []),
   ];

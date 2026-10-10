@@ -57,10 +57,12 @@ export async function integrationStatuses(db: Db | null, dbError?: string): Prom
   // Voice (VaaniVoice)
   const voiceVars = ["VAANI_API_KEY", "VAANI_WEBHOOK_TOKEN", "VOICE_GATEWAY_SECRET", "VAANI_AGENT_ID"];
   const liveCalls = db ? Number((await db.query<{ n: string }>(`SELECT count(*)::text AS n FROM calls WHERE provider = 'vaani' AND mode = 'live'`))[0].n) : 0;
+  const testCalls = db ? Number((await db.query<{ n: string }>(`SELECT count(*)::text AS n FROM calls WHERE provider = 'vaani' AND mode = 'simulated'`))[0].n) : 0;
   const liveWebhooks = db ? Number((await db.query<{ n: string }>(`SELECT count(*)::text AS n FROM webhook_events WHERE provider = 'vaani' AND status = 'processed'`))[0].n) : 0;
   const vCheck = (checks as Record<string, { status: string; detail: string; checked_at: string }>).voice;
   const extra = [
-    `Live VaaniVoice calls recorded: ${liveCalls}. Processed webhooks: ${liveWebhooks}.`,
+    `Live VaaniVoice calls recorded: ${liveCalls}. Browser test calls (staff): ${testCalls}. Processed webhooks: ${liveWebhooks}.`,
+    cfg.vaani.agentId ? "Agent ID: configured. Calls are pulled from VaaniVoice call history (Call history → Sync, and daily cron)." : "VAANI_AGENT_ID: not configured.",
     cfg.vaani.webhookToken ? "Webhook URL token: configured." : "Webhook URL token: NOT configured (webhook endpoint rejects all requests).",
     cfg.vaani.gatewaySecret ? "Voice gateway secret: configured." : "Voice gateway secret: NOT configured (BYOL turn endpoint rejects all requests).",
   ];

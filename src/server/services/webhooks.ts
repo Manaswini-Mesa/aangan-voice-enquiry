@@ -1,5 +1,6 @@
 import "server-only";
 import { disconnect, processTurn, type ConversationState } from "@/core/conversation/engine";
+import { guardOutbound } from "@/core/pricing/policy";
 import type { Db } from "../db/client";
 import { config } from "../env";
 import { normalizeVaaniWebhook, parseVaaniTranscript, webhookEventKey, type NormalizedVoiceEvent } from "../providers/voice/vaani";
@@ -38,7 +39,7 @@ async function recordVoiceUsage(db: Db, call: CallRow, durationSec: number) {
 }
 
 /** Runs the provider transcript's caller lines through the engine when we did not drive the call (no BYOL turns). */
-async function replayTranscript(tx: Db, call: CallRow, transcript: string) {
+export async function replayTranscript(tx: Db, call: CallRow, transcript: string) {
   const lines = parseVaaniTranscript(transcript);
   let state = call.conversation_state as ConversationState;
   if (state.turn > 0 || !lines.some((l) => l.speaker === "caller")) return false;
@@ -50,6 +51,9 @@ async function replayTranscript(tx: Db, call: CallRow, transcript: string) {
     if (line.speaker === "caller") {
       const out = processTurn({ ...state, ended: false }, { text: line.text, now }, { rules });
       state = out.state;
+    } else if (guardOutbound(line.text).blocked) {
+      // The provider's own LLM spoke this line; our guard can't block it after the fact, so flag it.
+      await opsEvent(tx, "error", "pricing_guard", "PROVIDER_AGENT_PRICE_DISCLOSURE", "The VaaniVoice agent appears to have stated a price, range or rate on a call. Review the transcript and tighten the agent prompt.", call.lead_id, { callId: call.id });
     }
   }
   state = disconnect({ ...state, ended: false }, rules, "completed").state;

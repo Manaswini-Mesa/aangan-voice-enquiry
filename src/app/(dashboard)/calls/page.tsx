@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { formatIst } from "@/core/time";
 import { RangeFilter } from "@/components/range-filter";
+import { SyncButton } from "@/components/sync-button";
+import { can } from "@/server/auth/permissions";
 import { Badge, Card, EmptyState, PageHeader, SimBadge, StatusBadge, Table, Td } from "@/components/ui";
 import { requireUser } from "@/server/auth/session";
 import { getDb } from "@/server/db/client";
@@ -18,7 +20,11 @@ export default async function CallsPage({ searchParams }: { searchParams: Promis
   const rows = await callsList(await getDb(), user, range);
   return (
     <>
-      <PageHeader title="Call history" description="Every call session recorded by the system. Live = delivered by the voice provider; Simulated = placed in the simulator or seeded demo data." />
+      <PageHeader
+        title="Call history"
+        description="Every call session recorded by the system. Live = delivered by the voice provider; Simulated = simulator, seeded demo data or staff test calls."
+        actions={can(user.role, "leads:edit") && config().vaani.apiKey ? <SyncButton /> : undefined}
+      />
       <RangeFilter path="/calls" current={range.label} sim={range.includeSimulated} from={sp.from} to={sp.to} showSim />
       <Card>
         {rows.length === 0 ? (

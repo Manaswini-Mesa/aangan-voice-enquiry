@@ -394,6 +394,61 @@ describe("provider and database failures", () => {
   });
 });
 
+describe("VaaniVoice pull sync (mocked API)", () => {
+  it("pulls finished calls for our agent, qualifies them from the transcript, records actual credit cost, and is idempotent", async () => {
+    process.env.VAANI_API_KEY = "test-key";
+    process.env.VAANI_AGENT_ID = "agent-1";
+    resetConfigForTests();
+    const { syncVaaniCalls } = await import("@/server/services/vaani-sync");
+    const realFetch = globalThis.fetch;
+    const calls_ = [
+      { call_id: "inbound-sync-1", call_type: "Inbound", direction: "Incoming", agent_id: "agent-1", from_number: "+919812300000", Start_time: "2026-10-09T05:00:00", End_time: "2026-10-09T05:03:00", duration_ms: 180000, call_cost: 2.5, post_processing_status: "completed" },
+      { call_id: "inbound-other-agent", agent_id: "someone-else", post_processing_status: "completed" },
+      { call_id: "inbound-sync-2", agent_id: "agent-1", post_processing_status: "processing" },
+    ];
+    globalThis.fetch = (async (url: string | URL) => {
+      const u = String(url);
+      if (u.includes("/api/call-history")) return new Response(JSON.stringify({ data: calls_, pagination: { has_next: false } }), { status: 200 });
+      if (u.includes("/api/call_details/inbound-sync-1"))
+        return new Response(
+          JSON.stringify({
+            transcription:
+              "AGENT: Hello, thank you for calling Aangan Studio.\n\n USER: Hi, I'm Leena. We have a 3BHK in Baner and want a full home redesign with execution.\n\n AGENT: Lovely. When would you like it complete?\n\n USER: By end of March, no rush.\n\n AGENT: Are you the decision maker?\n\n USER: Yes, it's my own flat.\n\n AGENT: Our rates start at 1800 per sq ft.",
+            summary: "Caller wants a 3BHK redesign in Baner.",
+          }),
+          { status: 200 },
+        );
+      return new Response("{}", { status: 404 });
+    }) as typeof fetch;
+    try {
+      const r = await syncVaaniCalls(db);
+      expect(r.error).toBeUndefined();
+      expect(r.checked).toBeGreaterThanOrEqual(2); // history (2 for our agent) + known unfinished calls from earlier tests
+      expect(r.ingested).toBe(1);
+      const call = await one<{ lead_id: string; mode: string; provider_summary: string; duration_sec: string }>(`SELECT * FROM calls WHERE provider_call_id = 'inbound-sync-1'`);
+      expect(call.mode).toBe("live");
+      expect(Number(call.duration_sec)).toBe(180);
+      const lead = await one<{ status: string; caller_name: string; locality: string; phone_normalized: string }>(`SELECT * FROM leads WHERE id = $1`, [call.lead_id]);
+      expect(lead.status).toBe("qualified");
+      expect(lead.caller_name).toBe("Leena");
+      expect(lead.locality).toBe("Baner");
+      expect(lead.phone_normalized).toBe("+919812300000");
+      const cost = await one<{ cost_type: string; cost_amount: string; cost_currency: string }>(`SELECT * FROM usage_events WHERE idempotency_key = 'vaani-cost:inbound-sync-1'`);
+      expect(cost).toMatchObject({ cost_type: "actual", cost_currency: "VAANI_CREDITS" });
+      expect(Number(cost.cost_amount)).toBe(2.5);
+      expect(await count(`SELECT count(*)::text n FROM ops_events WHERE code = 'PROVIDER_AGENT_PRICE_DISCLOSURE' AND lead_id = $1`, [call.lead_id])).toBe(1);
+      const again = await syncVaaniCalls(db);
+      expect(again.ingested).toBe(0);
+      expect(await count(`SELECT count(*)::text n FROM calls WHERE provider_call_id = 'inbound-sync-1'`)).toBe(1);
+    } finally {
+      globalThis.fetch = realFetch;
+      delete process.env.VAANI_API_KEY;
+      delete process.env.VAANI_AGENT_ID;
+      resetConfigForTests();
+    }
+  });
+});
+
 describe("retention", () => {
   it("transcripts past the retention date are removed; the lead and its assessment remain", async () => {
     const { applyRetention } = await import("@/server/services/webhooks");
