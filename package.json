@@ -16,7 +16,8 @@
     "db:migrate": "tsx --conditions=react-server scripts/migrate.mts",
     "user:create": "tsx --conditions=react-server scripts/create-user.mts",
     "scenario": "tsx scripts/run-scenario.ts",
-    "test:gateway": "node scripts/gateway-smoke.mjs"
+    "test:gateway": "node scripts/gateway-smoke.mjs",
+    "db:bootstrap": "tsx --conditions=react-server scripts/bootstrap.mts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",

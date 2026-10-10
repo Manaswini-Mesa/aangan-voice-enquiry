@@ -53,3 +53,8 @@ pricing*.md
 /.claude/
 
 .vercel
+.env*
+
+# Neon/Vercel agent skill files (not part of the app)
+/.agents/
+skills-lock.json
