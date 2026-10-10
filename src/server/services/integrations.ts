@@ -37,8 +37,10 @@ export async function integrationStatuses(db: Db | null, dbError?: string): Prom
     out.push({
       key: "database",
       name: "Database",
-      state: "simulated",
-      detail: `Embedded demo database (PGlite) at ${cfg.isVercel ? "/tmp — resets when the server instance restarts" : "./.data/pglite — persists across restarts on this machine"}. Not production persistence.`,
+      state: cfg.isVercel ? "error" : "simulated",
+      detail: cfg.isVercel
+        ? "Embedded demo database in /tmp on Vercel: every serverless function has its own copy and it resets on restart, so records are NOT shared between pages and API routes. Set DATABASE_URL (Neon)."
+        : "Embedded demo database (PGlite) at ./.data/pglite — persists across restarts on this machine. Not production persistence.",
       envVars: ["DATABASE_URL"],
       missing: missingVars(["DATABASE_URL"]),
       canVerify: false,

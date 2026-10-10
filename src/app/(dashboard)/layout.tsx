@@ -39,6 +39,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
   ];
   return (
     <div className="min-h-screen">
+      {cfg.isVercel && !cfg.databaseUrl && (
+        <div role="alert" className="bg-rose-100 px-4 py-2 text-center text-xs font-medium text-rose-900">
+          No DATABASE_URL on Vercel: each serverless function keeps its own temporary demo database, so records created in one place (e.g. the
+          simulator) may not appear in another, and data resets when instances restart. Add a Neon DATABASE_URL for a consistent demo or for live use.
+        </div>
+      )}
       {cfg.mode === "demo" ? (
         <div role="note" className="bg-amber-100 px-4 py-1.5 text-center text-xs font-medium text-amber-900">
           DEMO MODE — all enquiries are synthetic and simulated. No phone calls are answered and no emails are sent.

@@ -51,3 +51,5 @@ pricing*.md
 
 # local tool config
 /.claude/
+
+.vercel
