@@ -1,0 +1,6 @@
+.data
+.claude
+tests
+coverage
+*.pdf
+pricing*.md
